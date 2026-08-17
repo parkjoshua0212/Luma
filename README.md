@@ -13,14 +13,22 @@ free-tier infra instead of AWS.
 ## Status
 🚧 In progress
 
-## Features (so far)
+## Live Demo
+- **API base URL**: https://luma-api-djcb.onrender.com
+- **Swagger docs**: https://luma-api-djcb.onrender.com/api-docs
+
+> Note: hosted on Render's free tier — the server spins down after 15 minutes of 
+> inactivity. The first request after idle time may take 30-60 seconds to respond 
+> while it wakes up. This is expected behavior, not a bug.
+
+## Features
 - [x] User registration & login (JWT-based auth)
 - [x] Auth middleware for protected routes
 - [x] Conversation sessions (start, list, get, delete)
 - [x] AI chat integration (Gemini, formal/casual modes)
 - [x] Grammar correction
 - [x] Swagger docs
-- [ ] Deployment
+- [x] Deployed (Render)
 
 ## API Endpoints
 
