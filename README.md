@@ -16,7 +16,7 @@ free-tier infra instead of AWS.
 ## Features (so far)
 - [x] User registration & login (JWT-based auth)
 - [x] Auth middleware for protected routes
-- [ ] Conversation sessions
+- [x] Conversation sessions (start, list, get, delete)
 - [ ] AI chat integration (Gemini)
 - [ ] Grammar correction
 
@@ -29,6 +29,14 @@ free-tier infra instead of AWS.
 | POST | /api/auth/login | Login, returns JWT | No |
 | GET | /api/auth/me | Get current user | Yes |
 
+### Conversations
+| Method | Endpoint | Description | Auth required |
+|--------|----------|-------------|----------------|
+| POST | /api/conversations/start | Start a new conversation | Yes |
+| GET | /api/conversations | List all user's conversations | Yes |
+| GET | /api/conversations/:id | Get one conversation + messages | Yes |
+| DELETE | /api/conversations/:id | Delete a conversation | Yes |
+
 ## Setup
 1. Clone repo
 2. `npm install`
@@ -40,3 +48,8 @@ free-tier infra instead of AWS.
 Originally built the team version with Prisma. Rebuilding with raw SQL (`pg`) this time 
 to understand what an ORM actually abstracts away — connection pooling, query construction, 
 parameterized queries for SQL injection prevention, etc.
+
+## Design notes
+- All conversation queries filter by both `id` and `user_id` to prevent one user from 
+  accessing or deleting another user's data (IDOR protection) — since raw SQL doesn't 
+  enforce this automatically the way some ORMs' relation helpers do.
