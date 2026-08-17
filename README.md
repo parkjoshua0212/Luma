@@ -17,7 +17,7 @@ free-tier infra instead of AWS.
 - [x] User registration & login (JWT-based auth)
 - [x] Auth middleware for protected routes
 - [x] Conversation sessions (start, list, get, delete)
-- [ ] AI chat integration (Gemini)
+- [x] AI chat integration (Gemini, formal/casual modes)
 - [ ] Grammar correction
 
 ## API Endpoints
@@ -36,6 +36,7 @@ free-tier infra instead of AWS.
 | GET | /api/conversations | List all user's conversations | Yes |
 | GET | /api/conversations/:id | Get one conversation + messages | Yes |
 | DELETE | /api/conversations/:id | Delete a conversation | Yes |
+| POST | /api/conversations/:id/message | Send a message, get AI reply | Yes |
 
 ## Setup
 1. Clone repo
@@ -52,4 +53,9 @@ parameterized queries for SQL injection prevention, etc.
 ## Design notes
 - All conversation queries filter by both `id` and `user_id` to prevent one user from 
   accessing or deleting another user's data (IDOR protection) — since raw SQL doesn't 
-  enforce this automatically the way some ORMs' relation helpers do.
+  enforce this automatically the way some ORMs' relation helpers do.    
+- Conversation "mode" (formal/casual) is set once at conversation start and drives 
+  the AI's system prompt for every message in that session, giving each conversation 
+  a consistent tone throughout.
+- Chat history is passed back into each Gemini call as context, so the AI maintains 
+  conversational continuity across multiple messages in the same session.
