@@ -2,6 +2,7 @@
   "name": "luma",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "homepage": "https://github.com/parkjoshua0212/Luma#readme",
   "bugs": {
     "url": "https://github.com/parkjoshua0212/Luma/issues"
@@ -11,8 +12,7 @@
     "url": "git+https://github.com/parkjoshua0212/Luma.git"
   },
   "license": "ISC",
-  "author": "",
-  "type": "commonjs",
+  "author": "parkjoshua0212",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
