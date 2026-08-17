@@ -5,6 +5,9 @@ import authRoutes from './routes/authRoutes.js';
 import convRoutes from './routes/convRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './swagger.js';
+
 dotenv.config();
 
 const app = express();
@@ -14,6 +17,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', convRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/', (req, res) => res.send("Luma API is running!"));
 
