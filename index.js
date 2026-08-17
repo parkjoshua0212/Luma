@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { pool } from './db/pool.js';
 import authRoutes from './routes/authRoutes.js';
 import convRoutes from './routes/convRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
@@ -20,6 +21,23 @@ app.use('/api/ai', aiRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/', (req, res) => res.send("Luma API is running!"));
+
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'ok', 
+      db: 'connected', 
+      timestamp: new Date().toISOString() 
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      status: 'error', 
+      db: 'disconnected', 
+      error: err.message 
+    });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
