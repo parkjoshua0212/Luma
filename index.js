@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import convRoutes from './routes/convRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', convRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.get('/', (req, res) => res.send("Luma API is running!"));
 
