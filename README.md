@@ -19,7 +19,7 @@ free-tier infra instead of AWS.
 - [x] Conversation sessions (start, list, get, delete)
 - [x] AI chat integration (Gemini, formal/casual modes)
 - [x] Grammar correction
-- [ ] Swagger docs
+- [x] Swagger docs
 - [ ] Deployment
 
 ## API Endpoints
@@ -44,6 +44,9 @@ free-tier infra instead of AWS.
 | GET | /api/conversations/:id | Get one conversation + messages | Yes |
 | DELETE | /api/conversations/:id | Delete a conversation | Yes |
 | POST | /api/conversations/:id/message | Send a message, get AI reply | Yes |
+
+## API Documentation
+Full interactive API docs available at `/api-docs` when running locally (Swagger UI).
 
 ## Setup
 1. Clone repo
