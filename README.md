@@ -18,9 +18,16 @@ free-tier infra instead of AWS.
 - [x] Auth middleware for protected routes
 - [x] Conversation sessions (start, list, get, delete)
 - [x] AI chat integration (Gemini, formal/casual modes)
-- [ ] Grammar correction
+- [x] Grammar correction
+- [ ] Swagger docs
+- [ ] Deployment
 
 ## API Endpoints
+
+### AI
+| Method | Endpoint | Description | Auth required |
+|--------|----------|-------------|----------------|
+| POST | /api/ai/correct | Get grammar correction for a sentence | Yes |
 
 ### Auth
 | Method | Endpoint | Description | Auth required |
@@ -59,3 +66,6 @@ parameterized queries for SQL injection prevention, etc.
   a consistent tone throughout.
 - Chat history is passed back into each Gemini call as context, so the AI maintains 
   conversational continuity across multiple messages in the same session.
+  - The grammar correction endpoint prompts Gemini to return structured JSON directly, 
+  then strips markdown code fences (```json) that the model sometimes wraps around its 
+  output before parsing — a common quirk when getting structured data from LLM APIs.
