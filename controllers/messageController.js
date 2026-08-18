@@ -28,12 +28,26 @@ export const sendMessage = async (req, res) => {
       [id]
     );
 
-    await pool.query(
-      `INSERT INTO messages (conversation_id, sender, content) VALUES ($1, 'user', $2)`,
+    const userMessageResult = await pool.query(
+      `INSERT INTO messages (conversation_id, sender, content) 
+       VALUES ($1, 'user', $2) 
+       RETURNING id, sender, content, created_at`,
       [id, content]
     );
 
-    const aiReply = await getChatReply(mode, historyResult.rows, content);
+    // The user's message is saved at this point regardless of what happens next.
+    // If Gemini fails, we tell the caller explicitly instead of a generic 500,
+    // so the frontend can show "message sent, reply failed" instead of nothing.
+    let aiReply;
+    try {
+      aiReply = await getChatReply(mode, historyResult.rows, content);
+    } catch (aiErr) {
+      console.error('Gemini call failed:', aiErr);
+      return res.status(502).json({
+        error: 'Your message was saved, but the AI reply failed. Try again.',
+        userMessage: userMessageResult.rows[0]
+      });
+    }
 
     const aiMessageResult = await pool.query(
       `INSERT INTO messages (conversation_id, sender, content) 
@@ -42,7 +56,10 @@ export const sendMessage = async (req, res) => {
       [id, aiReply]
     );
 
-    res.status(201).json({ reply: aiMessageResult.rows[0] });
+    res.status(201).json({
+      userMessage: userMessageResult.rows[0],
+      reply: aiMessageResult.rows[0]
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to send message' });

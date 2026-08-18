@@ -1,8 +1,19 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { register, login, getMe } from '../controllers/authController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// Limit login/register attempts to slow down brute-force/credential stuffing.
+// 10 attempts per 15 minutes per IP is generous for a real user, punishing for a script.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /**
  * @swagger
@@ -30,7 +41,7 @@ const router = express.Router();
  *       400:
  *         description: Missing fields or email already exists
  */
-router.post('/register', register);
+router.post('/register', authLimiter, register);
 
 /**
  * @swagger
@@ -56,7 +67,7 @@ router.post('/register', register);
  *       401:
  *         description: Invalid credentials
  */
-router.post('/login', login);
+router.post('/login', authLimiter, login);
 
 /**
  * @swagger

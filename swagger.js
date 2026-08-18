@@ -9,6 +9,7 @@ const options = {
       description: 'Backend API for Luma — an AI language conversation practice app'
     },
     servers: [
+      { url: 'https://luma-api-djcb.onrender.com', description: 'Production (Render)' },
       { url: 'http://localhost:3000', description: 'Local dev server' }
     ],
     components: {
