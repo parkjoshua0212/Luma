@@ -26,11 +26,29 @@ endpoint checks any sentence for grammar errors and explains the correction.
 
 ## Architecture
 
-[diagram goes here — see below]
+```mermaid
+flowchart TD
+    Client[Client / Postman / Swagger UI]
+    
+    Client -->|HTTPS| API[Express API<br/>Node.js]
+    
+    API --> Auth[Auth Middleware<br/>JWT verification]
+    API --> AuthC[Auth Controller<br/>register/login]
+    API --> ConvC[Conversation Controller<br/>CRUD + messages]
+    API --> AIC[AI Controller<br/>grammar correction]
+    
+    AuthC --> DB[(PostgreSQL<br/>Neon)]
+    ConvC --> DB
+    ConvC --> Gemini[Google Gemini API<br/>chat + corrections]
+    AIC --> Gemini
+    
+    API -.->|deployed on| Render[Render<br/>free tier]
+```
 
 ## Features
 - User registration & login (JWT-based auth)
 - Auth middleware protecting all user-specific routes
+- Rate limiting on login/register to slow brute-force attempts
 - Conversation sessions (start, list, get, delete)
 - AI chat with formal/casual tone modes, with conversation history context
 - Grammar correction with structured JSON output + explanation
@@ -76,26 +94,22 @@ Full interactive docs: `/api-docs`
   and drives the system prompt for every message in that session, plus prior messages 
   are passed back into each Gemini call for context continuity.
 
-  ## Architecture
-
-```mermaid
-flowchart TD
-    Client[Client / Postman / Swagger UI]
-    
-    Client -->|HTTPS| API[Express API<br/>Node.js]
-    
-    API --> Auth[Auth Middleware<br/>JWT verification]
-    API --> AuthC[Auth Controller<br/>register/login]
-    API --> ConvC[Conversation Controller<br/>CRUD + messages]
-    API --> AIC[AI Controller<br/>grammar correction]
-    
-    AuthC --> DB[(PostgreSQL<br/>Neon)]
-    ConvC --> DB
-    ConvC --> Gemini[Google Gemini API<br/>chat + corrections]
-    AIC --> Gemini
-    
-    API -.->|deployed on| Render[Render<br/>free tier]
-```
+## Fixes & hardening (post-launch review)
+After the initial build, I went back through the code looking for edge cases and 
+security gaps. Fixed:
+- **Orphaned messages on AI failure**: `sendMessage` previously saved the user's 
+  message to the DB, then called Gemini — if that call failed, the user's message 
+  was stranded with no reply and the client just got a generic 500. Now a failed 
+  Gemini call returns a 502 with the saved user message attached, so the client can 
+  distinguish "your message didn't send" from "it sent, but the AI reply failed."
+- **No password length requirement**: `register` only checked that a password was 
+  present, not its length. Added an 8-character minimum.
+- **No rate limiting on auth routes**: `/login` and `/register` had no protection 
+  against brute-force or credential-stuffing attempts. Added `express-rate-limit` 
+  (10 attempts / 15 min / IP).
+- **Swagger docs pointed at localhost in production**: the hosted `/api-docs` page's 
+  "Try it out" button was configured to hit `localhost:3000`, which fails for anyone 
+  using the live docs. Added the Render URL as the primary server.
 
 ## Running locally
 
@@ -108,6 +122,5 @@ flowchart TD
 6. Visit `http://localhost:3000/api-docs`
 
 ## What's next
-- Web frontend
-- Possible React Native mobile app reusing this same API
-
+- Testing the API thoroughly in Postman
+- React Native mobile frontend reusing this same API
