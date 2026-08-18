@@ -2,7 +2,8 @@
 
 An AI-powered language conversation practice app — backend API. Solo rebuild of a 
 project originally built with a 7-person team, redone independently using raw SQL 
-(no ORM), free-tier infrastructure, and JWT auth to deepen backend fundamentals.
+(no ORM), free-tier infrastructure, JWT auth, and an automated test suite, to 
+deepen backend fundamentals.
 
 🔗 **Live API**: https://luma-api-djcb.onrender.com  
 📄 **Swagger docs**: https://luma-api-djcb.onrender.com/api-docs  
@@ -11,16 +12,33 @@ project originally built with a 7-person team, redone independently using raw SQ
 > Note: hosted on Render's free tier — the server spins down after 15 minutes of 
 > inactivity. First request after idle may take 30–60 seconds to respond.
 
+---
+
 ## What it does
 Users register, start a conversation session in **formal** or **casual** mode, and 
 chat with an AI language partner (Gemini) that adapts its tone accordingly. A separate 
 endpoint checks any sentence for grammar errors and explains the correction.
+
+## Skills demonstrated
+- REST API design with Express, including auth middleware and route protection
+- Raw SQL with parameterized queries (no ORM) — manual connection pooling and 
+  data-ownership enforcement
+- JWT authentication + bcrypt password hashing
+- Rate limiting to mitigate brute-force/credential-stuffing attempts
+- Automated testing with Jest + Supertest — unit tests, middleware tests, and a 
+  mocked-DB integration test
+- Third-party API integration (Google Gemini) with structured JSON output parsing
+- API documentation via Swagger/OpenAPI
+- Deployment to a live environment (Render + Neon Postgres)
+- Iterative hardening: found and fixed real bugs (see "Fixes & hardening" below) 
+  after the initial build, rather than treating v1 as final
 
 ## Tech Stack
 - **Backend**: Node.js, Express
 - **Database**: PostgreSQL (raw SQL via `pg` — no ORM)
 - **Auth**: JWT + bcrypt
 - **AI**: Google Gemini API
+- **Testing**: Jest, Supertest
 - **Docs**: Swagger / OpenAPI
 - **Hosting**: Render (API), Neon (Postgres)
 
@@ -54,7 +72,37 @@ flowchart TD
 - Grammar correction with structured JSON output + explanation
 - Interactive Swagger API docs
 - Health check endpoint (verifies DB connectivity)
+- Automated test suite (unit + integration)
 - Deployed and live
+
+---
+
+## Testing
+
+The project has an automated test suite using **Jest** (test runner) and 
+**Supertest** (HTTP assertions against the Express app). Tests run against 
+mocked dependencies (database, JWT verification) — no real database or 
+external API calls happen during test runs.
+
+**Run the tests:**
+```bash
+npm install
+npm test
+```
+
+**Current coverage:**
+| File | Type | What it verifies |
+|---|---|---|
+| `tests/validators.test.js` | Unit | Password length rule, conversation mode validation |
+| `tests/authMiddleware.test.js` | Unit | JWT middleware correctly accepts valid tokens and rejects missing/malformed/invalid ones |
+| `tests/health.test.js` | Integration | `/health` returns the correct status for both a healthy and an unreachable database |
+
+> **Honest scope note**: this is a starter suite, not full coverage. It covers 
+> validation logic, auth middleware, and one endpoint end-to-end. It does not yet 
+> cover `register`/`login` themselves, conversation CRUD, or the Gemini-dependent 
+> code paths — those are the next tests I plan to add.
+
+---
 
 ## API Overview
 
@@ -81,6 +129,8 @@ flowchart TD
 
 Full interactive docs: `/api-docs`
 
+---
+
 ## Design decisions
 - **Raw SQL over an ORM**: chose `pg` instead of Prisma (used in the original team 
   project) specifically to understand what an ORM abstracts — connection pooling, 
@@ -93,6 +143,9 @@ Full interactive docs: `/api-docs`
 - **Conversation-scoped tone**: mode (formal/casual) is set once at conversation start 
   and drives the system prompt for every message in that session, plus prior messages 
   are passed back into each Gemini call for context continuity.
+- **`app.js` / `index.js` split**: the Express app is defined in `app.js` and exported, 
+  while `index.js` just imports it and calls `.listen()`. This lets tests import the 
+  app directly with Supertest without starting a real server on a port.
 
 ## Fixes & hardening (post-launch review)
 After the initial build, I went back through the code looking for edge cases and 
@@ -103,7 +156,8 @@ security gaps. Fixed:
   Gemini call returns a 502 with the saved user message attached, so the client can 
   distinguish "your message didn't send" from "it sent, but the AI reply failed."
 - **No password length requirement**: `register` only checked that a password was 
-  present, not its length. Added an 8-character minimum.
+  present, not its length. Added an 8-character minimum, extracted into a testable 
+  `isValidPassword` helper.
 - **No rate limiting on auth routes**: `/login` and `/register` had no protection 
   against brute-force or credential-stuffing attempts. Added `express-rate-limit` 
   (10 attempts / 15 min / IP).
@@ -120,7 +174,12 @@ security gaps. Fixed:
 4. Run `db/schema.sql` against your Postgres instance
 5. `npm run dev`
 6. Visit `http://localhost:3000/api-docs`
+7. Run `npm test` to run the automated test suite
 
 ## What's next
-- Testing the API thoroughly in Postman
+- Expand test coverage to `register`/`login` and conversation CRUD
 - React Native mobile frontend reusing this same API
+- CI (GitHub Actions) to run tests automatically on push
+
+## License
+MIT — see [LICENSE](./LICENSE)
