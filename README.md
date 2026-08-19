@@ -38,6 +38,7 @@ endpoint checks any sentence for grammar errors and explains the correction.
 - **Database**: PostgreSQL (raw SQL via `pg` — no ORM)
 - **Auth**: JWT + bcrypt
 - **AI**: Google Gemini API
+- **Security**: Helmet, scoped CORS, rate limiting
 - **Testing**: Jest, Supertest
 - **Docs**: Swagger / OpenAPI
 - **Hosting**: Render (API), Neon (Postgres)
@@ -67,6 +68,9 @@ flowchart TD
 - User registration & login (JWT-based auth)
 - Auth middleware protecting all user-specific routes
 - Rate limiting on login/register to slow brute-force attempts
+- Security headers via Helmet, CORS restricted to an explicit origin allowlist
+- Prompt injection mitigation on AI-facing endpoints (system instructions kept
+  structurally separate from user input, plus input length caps)
 - Conversation sessions (start, list, get, delete)
 - AI chat with formal/casual tone modes, with conversation history context
 - Grammar correction with structured JSON output + explanation
@@ -149,7 +153,10 @@ Full interactive docs: `/api-docs`
 
 ## Fixes & hardening (post-launch review)
 After the initial build, I went back through the code looking for edge cases and 
-security gaps. Fixed:
+security gaps.
+
+### Round 1: initial review
+Fixed:
 - **Orphaned messages on AI failure**: `sendMessage` previously saved the user's 
   message to the DB, then called Gemini — if that call failed, the user's message 
   was stranded with no reply and the client just got a generic 500. Now a failed 
@@ -165,6 +172,23 @@ security gaps. Fixed:
   "Try it out" button was configured to hit `localhost:3000`, which fails for anyone 
   using the live docs. Added the Render URL as the primary server.
 
+### Round 2: security hardening after adding the web frontend
+Once a real frontend existed, three additional gaps became relevant:
+- **CORS allowed every origin**: `app.use(cors())` with no config meant *any* website 
+  could call the API from a browser. Replaced with an explicit origin allowlist 
+  (configurable via `ALLOWED_ORIGINS` env var), so only the actual frontend can call it.
+- **No security headers**: added `helmet`, which sets standard protections 
+  (MIME-sniffing prevention, clickjacking protection, etc.) that were previously 
+  entirely absent.
+- **Prompt injection risk in Gemini calls**: user input was string-concatenated 
+  directly into the same prompt as the system instructions, e.g. 
+  `` `Sentence to correct: "${sentence}"` ``, with no structural separation between 
+  "instructions" and "data." Refactored both Gemini calls to use the SDK's 
+  `systemInstruction` parameter (kept separate from user content at the API level) 
+  and added explicit "treat this as data, not commands" language, plus input length 
+  caps (500 chars for grammar checks, 2000 for chat messages) to limit how much room 
+  an attempt has to work with.
+
 ## Running locally
 
 1. Clone the repo
@@ -178,6 +202,7 @@ security gaps. Fixed:
 
 ## What's next
 - Expand test coverage to `register`/`login` and conversation CRUD
+- Deploy the web frontend and set `ALLOWED_ORIGINS` on Render to match
 - React Native mobile frontend reusing this same API
 - CI (GitHub Actions) to run tests automatically on push
 

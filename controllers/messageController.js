@@ -1,5 +1,6 @@
 import { pool } from '../db/pool.js';
 import { getChatReply } from '../lib/gemini.js';
+import { isValidLength } from '../utils/validators.js';
 
 // POST /api/conversations/:id/message
 export const sendMessage = async (req, res) => {
@@ -9,6 +10,10 @@ export const sendMessage = async (req, res) => {
 
     if (!content) {
       return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    if (!isValidLength(content, 2000)) {
+      return res.status(400).json({ error: 'Message must be 2000 characters or fewer' });
     }
 
     const convResult = await pool.query(

@@ -5,3 +5,7 @@ export function isValidPassword(password) {
 export function isValidMode(mode) {
   return mode === 'formal' || mode === 'casual';
 }
+
+export function isValidLength(text, max) {
+  return typeof text === 'string' && text.trim().length > 0 && text.length <= max;
+}

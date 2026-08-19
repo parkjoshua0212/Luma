@@ -1,4 +1,5 @@
 import { getGrammarCorrection } from '../lib/gemini.js';
+import { isValidLength } from '../utils/validators.js';
 
 // POST /api/ai/correct
 export const correctGrammar = async (req, res) => {
@@ -7,6 +8,10 @@ export const correctGrammar = async (req, res) => {
 
     if (!sentence || typeof sentence !== 'string') {
       return res.status(400).json({ error: 'A sentence string is required' });
+    }
+
+    if (!isValidLength(sentence, 500)) {
+      return res.status(400).json({ error: 'Sentence must be 500 characters or fewer' });
     }
 
     const result = await getGrammarCorrection(sentence);
