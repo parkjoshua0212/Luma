@@ -59,7 +59,7 @@ export const getConversationById = async (req, res) => {
     }
 
     const messagesResult = await pool.query(
-      `SELECT id, sender, content, created_at 
+      `SELECT id, sender, content, corrected_content, correction_explanation, created_at 
        FROM messages 
        WHERE conversation_id = $1 
        ORDER BY created_at ASC`,

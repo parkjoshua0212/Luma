@@ -19,5 +19,7 @@ CREATE TABLE messages (
   conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
   sender VARCHAR(10) CHECK (sender IN ('user', 'ai')),
   content TEXT NOT NULL,
+  corrected_content TEXT,
+  correction_explanation TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );

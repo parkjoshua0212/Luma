@@ -16,8 +16,11 @@ deepen backend fundamentals.
 
 ## What it does
 Users register, start a conversation session in **formal** or **casual** mode, and 
-chat with an AI language partner (Gemini) that adapts its tone accordingly. A separate 
-endpoint checks any sentence for grammar errors and explains the correction.
+chat with an AI language partner (Gemini) that adapts its tone accordingly. As you chat, 
+Luma checks your grammar in the background — a small lightbulb icon appears on any 
+message with a mistake, and clicking it shows the correction and explanation inline, 
+without leaving the conversation. A separate standalone endpoint also checks any 
+sentence for grammar errors on its own.
 
 ## Skills demonstrated
 - REST API design with Express, including auth middleware and route protection
@@ -73,7 +76,9 @@ flowchart TD
   structurally separate from user input, plus input length caps)
 - Conversation sessions (start, list, get, delete)
 - AI chat with formal/casual tone modes, with conversation history context
-- Grammar correction with structured JSON output + explanation
+- Inline grammar correction during chat — messages with errors show a lightbulb
+  icon with the correction and explanation, without interrupting the conversation
+- Grammar correction with structured JSON output + explanation (standalone endpoint)
 - Interactive Swagger API docs
 - Health check endpoint (verifies DB connectivity)
 - Automated test suite (unit + integration)
@@ -150,6 +155,12 @@ Full interactive docs: `/api-docs`
 - **`app.js` / `index.js` split**: the Express app is defined in `app.js` and exported, 
   while `index.js` just imports it and calls `.listen()`. This lets tests import the 
   app directly with Supertest without starting a real server on a port.
+- **Parallel Gemini calls for inline grammar correction**: sending a chat message 
+  triggers the conversational reply and a grammar check at the same time 
+  (`Promise.allSettled`), rather than one combined prompt asking Gemini to return 
+  both. Simpler to reason about and test independently, at the cost of doubling 
+  Gemini API usage per message — a deliberate trade-off given the free-tier daily 
+  quota, documented in "Fixes & hardening" below.
 
 ## Fixes & hardening (post-launch review)
 After the initial build, I went back through the code looking for edge cases and 
@@ -189,13 +200,27 @@ Once a real frontend existed, three additional gaps became relevant:
   caps (500 chars for grammar checks, 2000 for chat messages) to limit how much room 
   an attempt has to work with.
 
+### Round 3: inline grammar correction feature
+Added grammar checking directly into the chat flow (previously only available via 
+the standalone `/api/ai/correct` endpoint), plus a bug caught during manual testing:
+- **New schema**: `messages` gained two nullable columns, `corrected_content` and 
+  `correction_explanation`, populated only when Gemini finds a real error — "no 
+  errors found" or an identical sentence back doesn't light up the UI.
+- **Bug found while testing**: when the chat reply failed (a real Gemini `503` came 
+  up during testing) but the grammar check succeeded independently, the original 
+  implementation discarded the grammar result anyway, since the failure path only 
+  saved the message content. Fixed by extracting the correction-handling logic into 
+  its own function (`extractCorrection`) used in both the success and failure paths, 
+  so a failure in one Gemini call can never silently erase a result from the other.
+
 ## Running locally
 
 1. Clone the repo
 2. `npm install`
 3. Copy `.env.example` to `.env` and fill in your own values (Postgres URL, JWT 
    secret, Gemini API key)
-4. Run `db/schema.sql` against your Postgres instance
+4. Run `db/schema.sql` against your Postgres instance (or, if upgrading an existing 
+   database, run the files in `db/migrations/` instead)
 5. `npm run dev`
 6. Visit `http://localhost:3000/api-docs`
 7. Run `npm test` to run the automated test suite
