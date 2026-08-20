@@ -213,6 +213,19 @@ the standalone `/api/ai/correct` endpoint), plus a bug caught during manual test
   its own function (`extractCorrection`) used in both the success and failure paths, 
   so a failure in one Gemini call can never silently erase a result from the other.
 
+### Round 4: resilience against Gemini failures
+Real-world testing surfaced two distinct Gemini failure modes worth handling differently:
+- **Transient overload (`503`)**: Gemini occasionally returns "model currently 
+  experiencing high demand." Added automatic retry with backoff (up to 2 retries, 
+  waiting 1s then 2s) specifically for this error, since it's usually temporary.
+- **Quota exhaustion (`429`)**: the free tier caps Gemini 3.6 Flash at a low daily 
+  request limit, and since inline grammar correction doubles API usage per chat 
+  message (Round 3's trade-off), this is a realistic thing to hit during normal use. 
+  Retrying a quota error doesn't help, so this fails fast instead and returns a 
+  distinct, user-facing message ("You've hit today's free AI usage limit. Try again 
+  tomorrow.") rather than a generic error — both from the standalone grammar endpoint 
+  and from inside a chat conversation.
+
 ## Running locally
 
 1. Clone the repo

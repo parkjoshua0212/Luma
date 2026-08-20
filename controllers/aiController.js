@@ -18,6 +18,9 @@ export const correctGrammar = async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error(err);
+    if (err.isQuotaError) {
+      return res.status(429).json({ error: "You've hit today's free AI usage limit. Try again tomorrow." });
+    }
     res.status(500).json({ error: 'Failed to correct grammar' });
   }
 };

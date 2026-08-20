@@ -2,6 +2,27 @@ import { pool } from '../db/pool.js';
 import { getChatReply, getGrammarCorrection } from '../lib/gemini.js';
 import { isValidLength } from '../utils/validators.js';
 
+// Pulls a usable correction out of a settled grammar-check promise, or
+// returns nulls if it failed or found nothing worth flagging. Used in
+// both the success and failure paths below, so a failed chat reply can
+// never accidentally throw away a grammar result that succeeded fine.
+function extractCorrection(grammarSettled, originalContent) {
+  if (grammarSettled.status !== 'fulfilled') {
+    console.error('Grammar check failed (non-fatal):', grammarSettled.reason);
+    return { correctedContent: null, correctionExplanation: null };
+  }
+
+  const { corrected, explanation } = grammarSettled.value;
+  const noErrorsFound = explanation?.trim().toLowerCase() === 'no errors found';
+  const unchanged = corrected?.trim() === originalContent.trim();
+
+  if (noErrorsFound || unchanged) {
+    return { correctedContent: null, correctionExplanation: null };
+  }
+
+  return { correctedContent: corrected, correctionExplanation: explanation };
+}
+
 // POST /api/conversations/:id/message
 export const sendMessage = async (req, res) => {
   try {
@@ -34,9 +55,8 @@ export const sendMessage = async (req, res) => {
     );
 
     // Run the conversational reply and the grammar check in parallel —
-    // they're independent Gemini calls, no reason to wait on one before
-    // starting the other. allSettled (not all) means a grammar-check
-    // failure never takes down the actual conversation.
+    // they're independent Gemini calls. allSettled (not all) means a
+    // failure in either one never takes down the other.
     const [replySettled, grammarSettled] = await Promise.allSettled([
       getChatReply(mode, historyResult.rows, content),
       getGrammarCorrection(content)
@@ -44,38 +64,29 @@ export const sendMessage = async (req, res) => {
 
     if (replySettled.status === 'rejected') {
       console.error('Gemini chat reply failed:', replySettled.reason);
+
+      // The chat reply failing doesn't mean the grammar check did too —
+      // check it independently instead of discarding it.
+      const { correctedContent, correctionExplanation } = extractCorrection(grammarSettled, content);
+
       const userMessageResult = await pool.query(
-        `INSERT INTO messages (conversation_id, sender, content) 
-         VALUES ($1, 'user', $2) 
+        `INSERT INTO messages (conversation_id, sender, content, corrected_content, correction_explanation) 
+         VALUES ($1, 'user', $2, $3, $4) 
          RETURNING id, sender, content, corrected_content, correction_explanation, created_at`,
-        [id, content]
+        [id, content, correctedContent, correctionExplanation]
       );
-      return res.status(502).json({
-        error: 'Your message was saved, but the AI reply failed. Try again.',
+
+      const isQuotaError = replySettled.reason?.isQuotaError;
+      return res.status(isQuotaError ? 429 : 502).json({
+        error: isQuotaError
+          ? "You've hit today's free AI usage limit. Try again tomorrow."
+          : 'Your message was saved, but the AI reply failed. Try again.',
         userMessage: userMessageResult.rows[0]
       });
     }
 
     const aiReply = replySettled.value;
-
-    // Only attach a correction if the grammar check succeeded AND actually
-    // found something worth flagging — "no errors found" or an identical
-    // sentence shouldn't light up the lightbulb icon.
-    let correctedContent = null;
-    let correctionExplanation = null;
-    if (grammarSettled.status === 'fulfilled') {
-      const { corrected, explanation } = grammarSettled.value;
-      const noErrorsFound = explanation?.trim().toLowerCase() === 'no errors found';
-      const unchanged = corrected?.trim() === content.trim();
-      if (!noErrorsFound && !unchanged) {
-        correctedContent = corrected;
-        correctionExplanation = explanation;
-      }
-    } else {
-      // Non-fatal — the conversation still works, it just won't show a
-      // grammar tip for this particular message.
-      console.error('Grammar check failed (non-fatal):', grammarSettled.reason);
-    }
+    const { correctedContent, correctionExplanation } = extractCorrection(grammarSettled, content);
 
     const userMessageResult = await pool.query(
       `INSERT INTO messages (conversation_id, sender, content, corrected_content, correction_explanation) 
