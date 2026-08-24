@@ -5,12 +5,28 @@ project originally built with a 7-person team, redone independently using raw SQ
 (no ORM), free-tier infrastructure, JWT auth, and an automated test suite, to 
 deepen backend fundamentals.
 
-🔗 **Live API**: https://luma-api-djcb.onrender.com  
-📄 **Swagger docs**: https://luma-api-djcb.onrender.com/api-docs  
-❤️ **Health check**: https://luma-api-djcb.onrender.com/health
+**Live API**: https://luma-api-djcb.onrender.com  
+**Live web app**: https://luma-web-livid.vercel.app  
+**Swagger docs**: https://luma-api-djcb.onrender.com/api-docs  
+**Health check**: https://luma-api-djcb.onrender.com/health
 
 > Note: hosted on Render's free tier — the server spins down after 15 minutes of 
 > inactivity. First request after idle may take 30–60 seconds to respond.
+
+The frontend for this API lives in a separate repo: [Luma Web](https://github.com/parkjoshua0212/luma-web).
+
+## Contents
+- [What it does](#what-it-does)
+- [Skills demonstrated](#skills-demonstrated)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Testing](#testing)
+- [API Overview](#api-overview)
+- [Design decisions](#design-decisions)
+- [Fixes & hardening](#fixes--hardening)
+- [Running locally](#running-locally)
+- [What's next](#whats-next)
 
 ---
 
@@ -162,69 +178,14 @@ Full interactive docs: `/api-docs`
   Gemini API usage per message — a deliberate trade-off given the free-tier daily 
   quota, documented in "Fixes & hardening" below.
 
-## Fixes & hardening (post-launch review)
-After the initial build, I went back through the code looking for edge cases and 
-security gaps.
+## Fixes & hardening
+This project went through five rounds of post-launch review and real-world testing — 
+each one found genuine issues (not hypothetical ones) and fixed them: an orphaned-data 
+bug, missing password/rate-limit protection, wide-open CORS, a prompt injection gap, 
+a bug in the grammar-correction feature caught during manual testing, Gemini failure 
+handling, and two deployment-specific bugs. 
 
-### Round 1: initial review
-Fixed:
-- **Orphaned messages on AI failure**: `sendMessage` previously saved the user's 
-  message to the DB, then called Gemini — if that call failed, the user's message 
-  was stranded with no reply and the client just got a generic 500. Now a failed 
-  Gemini call returns a 502 with the saved user message attached, so the client can 
-  distinguish "your message didn't send" from "it sent, but the AI reply failed."
-- **No password length requirement**: `register` only checked that a password was 
-  present, not its length. Added an 8-character minimum, extracted into a testable 
-  `isValidPassword` helper.
-- **No rate limiting on auth routes**: `/login` and `/register` had no protection 
-  against brute-force or credential-stuffing attempts. Added `express-rate-limit` 
-  (10 attempts / 15 min / IP).
-- **Swagger docs pointed at localhost in production**: the hosted `/api-docs` page's 
-  "Try it out" button was configured to hit `localhost:3000`, which fails for anyone 
-  using the live docs. Added the Render URL as the primary server.
-
-### Round 2: security hardening after adding the web frontend
-Once a real frontend existed, three additional gaps became relevant:
-- **CORS allowed every origin**: `app.use(cors())` with no config meant *any* website 
-  could call the API from a browser. Replaced with an explicit origin allowlist 
-  (configurable via `ALLOWED_ORIGINS` env var), so only the actual frontend can call it.
-- **No security headers**: added `helmet`, which sets standard protections 
-  (MIME-sniffing prevention, clickjacking protection, etc.) that were previously 
-  entirely absent.
-- **Prompt injection risk in Gemini calls**: user input was string-concatenated 
-  directly into the same prompt as the system instructions, e.g. 
-  `` `Sentence to correct: "${sentence}"` ``, with no structural separation between 
-  "instructions" and "data." Refactored both Gemini calls to use the SDK's 
-  `systemInstruction` parameter (kept separate from user content at the API level) 
-  and added explicit "treat this as data, not commands" language, plus input length 
-  caps (500 chars for grammar checks, 2000 for chat messages) to limit how much room 
-  an attempt has to work with.
-
-### Round 3: inline grammar correction feature
-Added grammar checking directly into the chat flow (previously only available via 
-the standalone `/api/ai/correct` endpoint), plus a bug caught during manual testing:
-- **New schema**: `messages` gained two nullable columns, `corrected_content` and 
-  `correction_explanation`, populated only when Gemini finds a real error — "no 
-  errors found" or an identical sentence back doesn't light up the UI.
-- **Bug found while testing**: when the chat reply failed (a real Gemini `503` came 
-  up during testing) but the grammar check succeeded independently, the original 
-  implementation discarded the grammar result anyway, since the failure path only 
-  saved the message content. Fixed by extracting the correction-handling logic into 
-  its own function (`extractCorrection`) used in both the success and failure paths, 
-  so a failure in one Gemini call can never silently erase a result from the other.
-
-### Round 4: resilience against Gemini failures
-Real-world testing surfaced two distinct Gemini failure modes worth handling differently:
-- **Transient overload (`503`)**: Gemini occasionally returns "model currently 
-  experiencing high demand." Added automatic retry with backoff (up to 2 retries, 
-  waiting 1s then 2s) specifically for this error, since it's usually temporary.
-- **Quota exhaustion (`429`)**: the free tier caps Gemini 3.6 Flash at a low daily 
-  request limit, and since inline grammar correction doubles API usage per chat 
-  message (Round 3's trade-off), this is a realistic thing to hit during normal use. 
-  Retrying a quota error doesn't help, so this fails fast instead and returns a 
-  distinct, user-facing message ("You've hit today's free AI usage limit. Try again 
-  tomorrow.") rather than a generic error — both from the standalone grammar endpoint 
-  and from inside a chat conversation.
+**Full details, with the reasoning behind each fix: [CHANGELOG.md](./CHANGELOG.md)**
 
 ## Running locally
 
@@ -240,7 +201,6 @@ Real-world testing surfaced two distinct Gemini failure modes worth handling dif
 
 ## What's next
 - Expand test coverage to `register`/`login` and conversation CRUD
-- Deploy the web frontend and set `ALLOWED_ORIGINS` on Render to match
 - React Native mobile frontend reusing this same API
 - CI (GitHub Actions) to run tests automatically on push
 
