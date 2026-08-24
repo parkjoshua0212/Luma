@@ -44,8 +44,8 @@ sentence for grammar errors on its own.
   data-ownership enforcement
 - JWT authentication + bcrypt password hashing
 - Rate limiting to mitigate brute-force/credential-stuffing attempts
-- Automated testing with Jest + Supertest — unit tests, middleware tests, and a 
-  mocked-DB integration test
+- Automated testing with Jest + Supertest — unit tests, middleware tests, and 
+  integration tests covering auth, conversation CRUD, and IDOR protection specifically
 - Third-party API integration (Google Gemini) with structured JSON output parsing
 - API documentation via Swagger/OpenAPI
 - Deployment to a live environment (Render + Neon Postgres)
@@ -121,11 +121,15 @@ npm test
 | `tests/validators.test.js` | Unit | Password length rule, conversation mode validation |
 | `tests/authMiddleware.test.js` | Unit | JWT middleware correctly accepts valid tokens and rejects missing/malformed/invalid ones |
 | `tests/health.test.js` | Integration | `/health` returns the correct status for both a healthy and an unreachable database |
+| `tests/auth.test.js` | Integration | Register validation (missing fields, short password, duplicate email) and successful registration; login rejects unknown users and wrong passwords (using real bcrypt comparison, not mocked) and succeeds with correct credentials |
+| `tests/conversations.test.js` | Integration | All conversation routes require auth; mode validation on starting a conversation; list/get/delete all behave correctly; **explicitly verifies IDOR protection** — confirms the ownership check query is actually filtered by the token's decoded user ID |
 
-> **Honest scope note**: this is a starter suite, not full coverage. It covers 
-> validation logic, auth middleware, and one endpoint end-to-end. It does not yet 
-> cover `register`/`login` themselves, conversation CRUD, or the Gemini-dependent 
-> code paths — those are the next tests I plan to add.
+36 tests total, all passing.
+
+> **Honest scope note**: auth (register/login) and conversation CRUD are now covered, 
+> including the IDOR protection specifically. Not yet covered: the Gemini-dependent 
+> code paths (`sendMessage`'s AI reply/grammar-check flow, the retry/quota logic) — 
+> these need heavier mocking around external API calls and are the next tests planned.
 
 ---
 
@@ -200,9 +204,9 @@ handling, and two deployment-specific bugs.
 7. Run `npm test` to run the automated test suite
 
 ## What's next
-- Expand test coverage to `register`/`login` and conversation CRUD
 - React Native mobile frontend reusing this same API
 - CI (GitHub Actions) to run tests automatically on push
+- Test coverage for the Gemini-dependent code paths (chat reply, grammar check, retry/quota logic)
 
 ## License
 MIT — see [LICENSE](./LICENSE)
