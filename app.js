@@ -43,6 +43,11 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/', (req, res) => res.send("Luma API is running!"));
 
+// TEMPORARY: used to find the right 'trust proxy' hop count on Render. Remove after.
+app.get('/debug/ip', (req, res) => {
+  res.json({ ip: req.ip, ips: req.ips, xForwardedFor: req.headers['x-forwarded-for'] });
+});
+
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
