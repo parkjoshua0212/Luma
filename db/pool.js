@@ -1,10 +1,8 @@
 import pg from 'pg';
-import dotenv from 'dotenv';
-dotenv.config();
 
 const { Pool } = pg;
 
 export const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } //needed for Neon
+    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false } //SSL needed for Neon, off for local/CI Postgres
 });
