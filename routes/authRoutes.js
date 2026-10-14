@@ -7,9 +7,10 @@ const router = express.Router();
 
 // Limit login/register attempts to slow down brute-force/credential stuffing.
 // 10 attempts per 15 minutes per IP is generous for a real user, punishing for a script.
+// AUTH_RATE_LIMIT_MAX overrides it so tests can control the limit.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
   message: { error: 'Too many attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
