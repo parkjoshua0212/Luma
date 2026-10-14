@@ -11,6 +11,10 @@ import { swaggerSpec } from './swagger.js';
 
 export const app = express();
 
+// Render puts 3 proxies in front of the app (measured from X-Forwarded-For).
+// Higher would let clients spoof req.ip and dodge the rate limiter.
+app.set('trust proxy', 3);
+
 app.use(helmet());
 
 // Only these origins are allowed to call the API from a browser.
@@ -42,11 +46,6 @@ app.use('/api/ai', aiRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/', (req, res) => res.send("Luma API is running!"));
-
-// TEMPORARY: used to find the right 'trust proxy' hop count on Render. Remove after.
-app.get('/debug/ip', (req, res) => {
-  res.json({ ip: req.ip, ips: req.ips, xForwardedFor: req.headers['x-forwarded-for'] });
-});
 
 app.get('/health', async (req, res) => {
   try {
