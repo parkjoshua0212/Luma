@@ -36,3 +36,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl --fail --silent --show-error "$RENDER_DEPLOY_HOOK_URL"
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
