@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7" # 3.7 added ephemeral random_password
+    }
   }
 
   # The bucket comes from infra/bootstrap. Backend blocks can't reference
