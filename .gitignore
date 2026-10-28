@@ -35,3 +35,6 @@ Thumbs.db
 !*.tfvars.example
 crash.log
 *.tfplan
+
+# Claude Code session notes
+CLAUDE.md
