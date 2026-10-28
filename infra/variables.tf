@@ -9,3 +9,9 @@ variable "region" {
   type        = string
   default     = "ap-northeast-2"
 }
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC; subnets are carved out of it as /24s"
+  type        = string
+  default     = "10.0.0.0/16"
+}
