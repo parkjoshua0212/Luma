@@ -1,212 +1,164 @@
 # Luma
 
-An AI-powered language conversation practice app — backend API. Solo rebuild of a 
-project originally built with a 7-person team, redone independently using raw SQL 
-(no ORM), free-tier infrastructure, JWT auth, and an automated test suite, to 
-deepen backend fundamentals.
+A Node.js/Express + PostgreSQL REST API for practicing language conversation with an AI partner (Google Gemini), with inline grammar correction.
 
-**Live API**: https://luma-api-djcb.onrender.com  
-**Live web app**: https://luma-web-livid.vercel.app  
-**Swagger docs**: https://luma-api-djcb.onrender.com/api-docs  
-**Health check**: https://luma-api-djcb.onrender.com/health
+**Live API docs (Swagger):** https://luma-api-djcb.onrender.com/api-docs
 
-> Note: hosted on Render's free tier — the server spins down after 15 minutes of 
-> inactivity. First request after idle may take 30–60 seconds to respond.
+> **Heads-up:** the API runs on Render's free tier, which sleeps when idle. The first request after a quiet period can take **~30–60 seconds** while the instance wakes up. After that, responses are normal.
 
-The frontend for this API lives in a separate repo: [Luma Web](https://github.com/parkjoshua0212/luma-web).
+The frontend lives in a separate repo: [Luma Web](https://github.com/parkjoshua0212/luma-web).
 
 ## Contents
 - [What it does](#what-it-does)
-- [Skills demonstrated](#skills-demonstrated)
-- [Tech Stack](#tech-stack)
+- [Tech stack](#tech-stack)
 - [Architecture](#architecture)
-- [Features](#features)
-- [Testing](#testing)
-- [API Overview](#api-overview)
-- [Design decisions](#design-decisions)
-- [Fixes & hardening](#fixes--hardening)
+- [CI/CD](#cicd)
+- [Security](#security)
+- [API overview](#api-overview)
 - [Running locally](#running-locally)
-- [What's next](#whats-next)
-
----
+- [License](#license)
 
 ## What it does
-Users register, start a conversation session in **formal** or **casual** mode, and 
-chat with an AI language partner (Gemini) that adapts its tone accordingly. As you chat, 
-Luma checks your grammar in the background — a small lightbulb icon appears on any 
-message with a mistake, and clicking it shows the correction and explanation inline, 
-without leaving the conversation. A separate standalone endpoint also checks any 
-sentence for grammar errors on its own.
+Users register, start a conversation in **formal** or **casual** mode, and chat with a Gemini-backed partner whose tone follows the mode. Each message also gets a grammar check in parallel. If the check finds a mistake, the correction and explanation are stored on the user's message. A separate endpoint checks any single sentence on its own.
 
-## Skills demonstrated
-- REST API design with Express, including auth middleware and route protection
-- Raw SQL with parameterized queries (no ORM) — manual connection pooling and 
-  data-ownership enforcement
-- JWT authentication + bcrypt password hashing
-- Rate limiting to mitigate brute-force/credential-stuffing attempts
-- Automated testing with Jest + Supertest — unit tests, middleware tests, and 
-  integration tests covering auth, conversation CRUD, and IDOR protection specifically
-- Third-party API integration (Google Gemini) with structured JSON output parsing
-- API documentation via Swagger/OpenAPI
-- Deployment to a live environment (Render + Neon Postgres)
-- Iterative hardening: found and fixed real bugs (see "Fixes & hardening" below) 
-  after the initial build, rather than treating v1 as final
-
-## Tech Stack
-- **Backend**: Node.js, Express
-- **Database**: PostgreSQL (raw SQL via `pg` — no ORM)
-- **Auth**: JWT + bcrypt
-- **AI**: Google Gemini API
-- **Security**: Helmet, scoped CORS, rate limiting
-- **Testing**: Jest, Supertest
-- **Docs**: Swagger / OpenAPI
-- **Hosting**: Render (API), Neon (Postgres)
+## Tech stack
+| Area | Tools |
+|---|---|
+| Runtime | Node.js 24, Express 5 (ES modules) |
+| Database | PostgreSQL via `pg` with raw parameterized SQL (no ORM); Neon in production |
+| Auth | JWT (`jsonwebtoken`, 7-day expiry), `bcrypt` password hashing |
+| AI | Google Gemini via `@google/genai` (`gemini-3.6-flash`) |
+| Security | Helmet, CORS origin allowlist, `express-rate-limit` |
+| Docs | Swagger / OpenAPI (`swagger-jsdoc`, `swagger-ui-express`) |
+| Testing & lint | Jest, Supertest, ESLint |
+| CI/CD & hosting | GitHub Actions, Render (via deploy hook) |
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    Client[Client / Postman / Swagger UI]
-    
-    Client -->|HTTPS| API[Express API<br/>Node.js]
-    
-    API --> Auth[Auth Middleware<br/>JWT verification]
-    API --> AuthC[Auth Controller<br/>register/login]
-    API --> ConvC[Conversation Controller<br/>CRUD + messages]
-    API --> AIC[AI Controller<br/>grammar correction]
-    
-    AuthC --> DB[(PostgreSQL<br/>Neon)]
-    ConvC --> DB
-    ConvC --> Gemini[Google Gemini API<br/>chat + corrections]
-    AIC --> Gemini
-    
-    API -.->|deployed on| Render[Render<br/>free tier]
+flowchart LR
+    Client["Client<br/>(web app / curl / Swagger UI)"] -->|HTTPS + JWT| API["Express API<br/>(Render)"]
+    API -->|parameterized SQL| DB[("PostgreSQL<br/>(Neon)")]
+    API -->|chat reply + grammar check| Gemini["Google Gemini API"]
+
+    subgraph CICD["CI/CD"]
+        GHA["GitHub Actions<br/>lint + tests"] -->|on success, push to main| Hook["Render deploy hook"]
+    end
+    Hook -->|triggers deploy| API
 ```
 
-## Features
-- User registration & login (JWT-based auth)
-- Auth middleware protecting all user-specific routes
-- Rate limiting on login/register to slow brute-force attempts
-- Security headers via Helmet, CORS restricted to an explicit origin allowlist
-- Prompt injection mitigation on AI-facing endpoints (system instructions kept
-  structurally separate from user input, plus input length caps)
-- Conversation sessions (start, list, get, delete)
-- AI chat with formal/casual tone modes, with conversation history context
-- Inline grammar correction during chat — messages with errors show a lightbulb
-  icon with the correction and explanation, without interrupting the conversation
-- Grammar correction with structured JSON output + explanation (standalone endpoint)
-- Interactive Swagger API docs
-- Health check endpoint (verifies DB connectivity)
-- Automated test suite (unit + integration)
-- Deployed and live
+**Code layout**
 
----
+| Path | Purpose |
+|---|---|
+| `index.js` | Loads env and starts the server |
+| `app.js` | Builds the Express app (Helmet, CORS, routes, `/health`, `/api-docs`); exported so tests can import it without opening a port |
+| `routes/` | Route definitions and Swagger annotations |
+| `controllers/` | Request handling and SQL |
+| `lib/gemini.js` | Gemini client, system prompts, retry logic |
+| `middleware/authMiddleware.js` | JWT verification (`requireAuth`) |
+| `utils/validators.js` | Password, mode, and input-length checks |
+| `db/schema.sql` | Tables: `users`, `conversations`, `messages` (deletes cascade) |
 
-## Testing
+## CI/CD
+The workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). It runs on every push and pull request to `main`.
 
-The project has an automated test suite using **Jest** (test runner) and 
-**Supertest** (HTTP assertions against the Express app). Tests run against 
-mocked dependencies (database, JWT verification) — no real database or 
-external API calls happen during test runs.
+1. **`test` job:** starts a Postgres 18 service container, then runs `npm ci`, `npm run lint` (ESLint), and `npm test` (Jest + Supertest).
+2. **`deploy` job:** declared with `needs: test`, so it only runs after the test job passes, and only on pushes (never on PRs). It calls the Render deploy hook stored in the `RENDER_DEPLOY_HOOK_URL` secret.
 
-**Run the tests:**
-```bash
-npm install
-npm test
-```
+If lint or any test fails, nothing deploys.
 
-**Current coverage:**
-| File | Type | What it verifies |
+**Test suite: 48 tests**
+
+| Suite | Tests | What runs |
 |---|---|---|
-| `tests/validators.test.js` | Unit | Password length rule, conversation mode validation |
-| `tests/authMiddleware.test.js` | Unit | JWT middleware correctly accepts valid tokens and rejects missing/malformed/invalid ones |
-| `tests/health.test.js` | Integration | `/health` returns the correct status for both a healthy and an unreachable database |
-| `tests/auth.test.js` | Integration | Register validation (missing fields, short password, duplicate email) and successful registration; login rejects unknown users and wrong passwords (using real bcrypt comparison, not mocked) and succeeds with correct credentials |
-| `tests/conversations.test.js` | Integration | All conversation routes require auth; mode validation on starting a conversation; list/get/delete all behave correctly; **explicitly verifies IDOR protection** — confirms the ownership check query is actually filtered by the token's decoded user ID |
+| Unit (`tests/*.test.js`) | 36 | Validators, JWT middleware, and auth, conversation, and health routes, with the database mocked |
+| Integration (`tests/integration/`) | 12 | Runs against a real Postgres. The schema is rebuilt from `db/schema.sql` before the run, and Gemini is mocked. Covers register/login, IDOR checks, sending a message, `/health`, and the login rate limit returning 429. |
 
-36 tests total, all passing.
+## Security
+- **User-scoped queries (IDOR protection).** Every conversation query filters on both the conversation `id` and the `user_id` from the verified JWT (`WHERE id = $1 AND user_id = $2`). Messages are only read or written after that ownership check passes. Another user's conversation returns `404`, so its existence isn't revealed. Integration tests check that a second user gets `404` on GET, DELETE, and send-message, that the conversation survives the DELETE attempt, and that Gemini is never called.
+- **Auth rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` share a limiter of **10 requests per 15 minutes per IP**, which can be overridden with `AUTH_RATE_LIMIT_MAX`. Going over the limit returns `429`. `trust proxy` is set to `3` to match Render's proxy chain, so clients can't spoof `X-Forwarded-For` to get around the limit.
+- **Password policy.** Passwords must be strings of **at least 8 characters**. They're hashed with bcrypt (cost 10), and login returns the same `Invalid credentials` message whether the email is unknown or the password is wrong.
+- **Failed AI calls.**
+  - Gemini `503` (overloaded) is retried up to 2 times, with backoff of 1s and then 2s.
+  - Gemini `429` (quota) fails fast and is returned to the client as `429` with a "daily AI limit" message.
+  - The chat reply and grammar check run in parallel with `Promise.allSettled`, so one failing doesn't cancel the other. A failed grammar check is non-fatal: the message is saved without a correction.
+  - If the chat reply fails, the user's message (and any grammar correction that succeeded) is still saved. The API responds with `502` (or `429` for quota) and includes the saved `userMessage`, so the client can retry without losing input.
+  - If Gemini returns grammar JSON that can't be parsed, the call fails with a clean `500` and doesn't crash the server.
+- **Other hardening.**
+  - Inputs are length-capped: 2000 characters for chat messages, 500 for grammar sentences.
+  - System prompts tell the model to treat user text as practice input, not instructions.
+  - Helmet sets the security headers.
+  - CORS only accepts browser origins on the allowlist (`ALLOWED_ORIGINS`).
+  - All SQL is parameterized.
 
-> **Honest scope note**: auth (register/login) and conversation CRUD are now covered, 
-> including the IDOR protection specifically. Not yet covered: the Gemini-dependent 
-> code paths (`sendMessage`'s AI reply/grammar-check flow, the retry/quota logic) — 
-> these need heavier mocking around external API calls and are the next tests planned.
+## API overview
+There are **9 API endpoints** in three groups, plus two utility routes. The full interactive docs are at [`/api-docs`](https://luma-api-djcb.onrender.com/api-docs).
 
----
-
-## API Overview
-
-### Auth
+**Auth: 3 endpoints**
 | Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| POST | /api/auth/register | Create new user | No |
-| POST | /api/auth/login | Login, returns JWT | No |
-| GET | /api/auth/me | Get current user | Yes |
+| POST | `/api/auth/register` | Create a user and return a JWT (rate limited) | No |
+| POST | `/api/auth/login` | Log in and return a JWT (rate limited) | No |
+| GET | `/api/auth/me` | Get the current user | Yes |
 
-### Conversations
+**Conversations: 5 endpoints**
 | Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| POST | /api/conversations/start | Start a new conversation | Yes |
-| GET | /api/conversations | List user's conversations | Yes |
-| GET | /api/conversations/:id | Get conversation + messages | Yes |
-| DELETE | /api/conversations/:id | Delete a conversation | Yes |
-| POST | /api/conversations/:id/message | Send message, get AI reply | Yes |
+| POST | `/api/conversations/start` | Start a conversation (`mode`: `formal` or `casual`) | Yes |
+| GET | `/api/conversations` | List your conversations | Yes |
+| GET | `/api/conversations/:id` | Get a conversation and its messages | Yes |
+| DELETE | `/api/conversations/:id` | Delete a conversation (its messages cascade) | Yes |
+| POST | `/api/conversations/:id/message` | Send a message; returns the AI reply plus any grammar correction | Yes |
 
-### AI
+**AI: 1 endpoint**
 | Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| POST | /api/ai/correct | Grammar correction + explanation | Yes |
+| POST | `/api/ai/correct` | Correct one sentence and explain the fix | Yes |
 
-Full interactive docs: `/api-docs`
-
----
-
-## Design decisions
-- **Raw SQL over an ORM**: chose `pg` instead of Prisma (used in the original team 
-  project) specifically to understand what an ORM abstracts — connection pooling, 
-  parameterized queries, manual relation handling.
-- **IDOR protection**: every conversation query filters by both `id` and `user_id`, 
-  since raw SQL doesn't enforce data ownership automatically the way some ORMs' 
-  relation helpers do.
-- **Structured AI output**: the grammar correction endpoint prompts Gemini to return 
-  JSON directly, then strips markdown code fences the model sometimes wraps around it.
-- **Conversation-scoped tone**: mode (formal/casual) is set once at conversation start 
-  and drives the system prompt for every message in that session, plus prior messages 
-  are passed back into each Gemini call for context continuity.
-- **`app.js` / `index.js` split**: the Express app is defined in `app.js` and exported, 
-  while `index.js` just imports it and calls `.listen()`. This lets tests import the 
-  app directly with Supertest without starting a real server on a port.
-- **Parallel Gemini calls for inline grammar correction**: sending a chat message 
-  triggers the conversational reply and a grammar check at the same time 
-  (`Promise.allSettled`), rather than one combined prompt asking Gemini to return 
-  both. Simpler to reason about and test independently, at the cost of doubling 
-  Gemini API usage per message — a deliberate trade-off given the free-tier daily 
-  quota, documented in "Fixes & hardening" below.
-
-## Fixes & hardening
-This project went through five rounds of post-launch review and real-world testing — 
-each one found genuine issues (not hypothetical ones) and fixed them: an orphaned-data 
-bug, missing password/rate-limit protection, wide-open CORS, a prompt injection gap, 
-a bug in the grammar-correction feature caught during manual testing, Gemini failure 
-handling, and two deployment-specific bugs. 
-
-**Full details, with the reasoning behind each fix: [CHANGELOG.md](./CHANGELOG.md)**
+**Utility routes**
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Liveness text |
+| GET | `/health` | Checks database connectivity (`200` or `500`) |
 
 ## Running locally
 
-1. Clone the repo
-2. `npm install`
-3. Copy `.env.example` to `.env` and fill in your own values (Postgres URL, JWT 
-   secret, Gemini API key)
-4. Run `db/schema.sql` against your Postgres instance (or, if upgrading an existing 
-   database, run the files in `db/migrations/` instead)
-5. `npm run dev`
-6. Visit `http://localhost:3000/api-docs`
-7. Run `npm test` to run the automated test suite
+**Prerequisites:** Node.js 24, a PostgreSQL database, and a Gemini API key.
 
-## What's next
-- React Native mobile frontend reusing this same API
-- CI (GitHub Actions) to run tests automatically on push
-- Test coverage for the Gemini-dependent code paths (chat reply, grammar check, retry/quota logic)
+```bash
+git clone https://github.com/parkjoshua0212/Luma.git
+cd Luma
+npm install
+cp .env.example .env        # then fill in the values
+psql "$DATABASE_URL" -f db/schema.sql
+npm run dev                 # http://localhost:3000/api-docs
+```
+
+`.env.example` lists every environment variable the app reads:
+
+```bash
+DATABASE_URL=          # Postgres connection string
+DB_SSL=                # "false" for a local Postgres without SSL; otherwise SSL is on
+JWT_SECRET=            # secret for signing JWTs
+GEMINI_API_KEY=        # Google Gemini API key
+ALLOWED_ORIGINS=       # optional, comma-separated CORS origins (default: localhost:5173, localhost:3000)
+AUTH_RATE_LIMIT_MAX=   # optional, auth attempts per 15 min per IP (default: 10)
+PORT=                  # optional (default: 3000)
+```
+
+`node db/test-connection.js` checks that the database connection works.
+
+**Tests and lint**
+
+```bash
+npm run lint
+npm run test:unit          # 36 tests, no database needed
+npm run test:integration   # 12 tests, needs Postgres on localhost:5432
+npm test                   # both
+```
+
+The integration tests use hardcoded settings from `tests/integration/env.js`: `postgres://postgres:postgres@localhost:5432/luma_test`, with SSL off and a mocked Gemini, so they can never reach production services. Before running, they **drop and recreate** the `users`, `conversations`, and `messages` tables in that database. Don't point it at a database you care about.
 
 ## License
-MIT — see [LICENSE](./LICENSE)
+MIT. See [LICENSE](./LICENSE).
