@@ -38,3 +38,6 @@ crash.log
 
 # Claude Code session notes
 CLAUDE.md
+
+# Jest coverage output
+coverage/

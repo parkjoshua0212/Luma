@@ -1,5 +1,7 @@
 # Luma
 
+[![CI](https://github.com/parkjoshua0212/Luma/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/parkjoshua0212/Luma/actions/workflows/ci.yml)
+
 A Node.js/Express + PostgreSQL REST API for practicing language conversation with an AI partner (Google Gemini), with inline grammar correction.
 
 **Live API docs (Swagger):** https://luma-api-djcb.onrender.com/api-docs
