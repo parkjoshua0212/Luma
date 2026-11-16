@@ -4,6 +4,8 @@
 
 A Node.js/Express + PostgreSQL REST API for practicing language conversation with an AI partner (Google Gemini), with inline grammar correction.
 
+> **한국어 요약:** AI(Google Gemini)와 외국어 회화를 연습하고, 보낸 문장마다 문법 교정을 받을 수 있는 Node.js/Express + PostgreSQL REST API입니다. 팀 프로젝트였던 LingoMate의 백엔드를 혼자 다시 설계·구현했으며, Render에 배포되어 있습니다. GitHub Actions에서 ESLint와 테스트 74개(Jest/Supertest, 커버리지 약 89%)를 통과해야만 배포됩니다.
+
 **Live API docs (Swagger):** https://luma-api-djcb.onrender.com/api-docs
 
 > **Heads-up:** the API runs on Render's free tier, which sleeps when idle. The first request after a quiet period can take **~30–60 seconds** while the instance wakes up. After that, responses are normal.
@@ -65,16 +67,16 @@ flowchart LR
 ## CI/CD
 The workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). It runs on every push and pull request to `main`.
 
-1. **`test` job:** starts a Postgres 18 service container, then runs `npm ci`, `npm run lint` (ESLint), and `npm test` (Jest + Supertest).
+1. **`test` job:** starts a Postgres 18 service container, then runs `npm ci`, `npm run lint` (ESLint), and `npm run test:coverage` (Jest + Supertest: the unit and integration suites together, with one combined coverage report).
 2. **`deploy` job:** declared with `needs: test`, so it only runs after the test job passes, and only on pushes (never on PRs). It calls the Render deploy hook stored in the `RENDER_DEPLOY_HOOK_URL` secret.
 
 If lint or any test fails, nothing deploys.
 
-**Test suite: 48 tests**
+**Test suite: 74 tests, about 89% line coverage**
 
 | Suite | Tests | What runs |
 |---|---|---|
-| Unit (`tests/*.test.js`) | 36 | Validators, JWT middleware, and auth, conversation, and health routes, with the database mocked |
+| Unit (`tests/*.test.js`) | 62 | Validators, JWT middleware, the Gemini client (503 retries, 429 quota handling), and auth, conversation, AI and health routes, with the database mocked |
 | Integration (`tests/integration/`) | 12 | Runs against a real Postgres. The schema is rebuilt from `db/schema.sql` before the run, and Gemini is mocked. Covers register/login, IDOR checks, sending a message, `/health`, and the login rate limit returning 429. |
 
 ## Security
@@ -155,9 +157,10 @@ PORT=                  # optional (default: 3000)
 
 ```bash
 npm run lint
-npm run test:unit          # 36 tests, no database needed
+npm run test:unit          # 62 tests, no database needed
 npm run test:integration   # 12 tests, needs Postgres on localhost:5432
 npm test                   # both
+npm run test:coverage      # both, with a coverage report (what CI runs)
 ```
 
 The integration tests use hardcoded settings from `tests/integration/env.js`: `postgres://postgres:postgres@localhost:5432/luma_test`, with SSL off and a mocked Gemini, so they can never reach production services. Before running, they **drop and recreate** the `users`, `conversations`, and `messages` tables in that database. Don't point it at a database you care about.
